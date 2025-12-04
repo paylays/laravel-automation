@@ -1,8 +1,8 @@
-name: Deploy to VPS (main)
+name: Deploy project-two via Cloudflare Tunnel
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main ]   # ganti ke 'development' kalau mau trigger di branch itu
 
 jobs:
   deploy:
@@ -12,35 +12,49 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Deploy project-two via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd ${{ secrets.SERVER_PATH_TWO }}
+      - name: Install cloudflared
+        run: |
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+          sudo mv cloudflared /usr/local/bin/cloudflared
 
-            echo "===> Update code (main)"
-            git fetch origin
-            git reset --hard origin/main
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-            echo "===> Install PHP dependencies"
-            composer install --no-interaction --prefer-dist --optimize-autoloader
+      - name: Deploy project-two over Cloudflare Tunnel
+        env:
+          CF_HOST: ${{ secrets.CF_SSH_HOST }}   # isi secret=ssh.paylayspace.my.id
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+            -o "ProxyCommand=cloudflared access ssh --hostname $CF_HOST" \
+            -o StrictHostKeyChecking=no \
+            paylays@$CF_HOST << 'EOF'
+              cd /var/www/paylayspace/project-two
 
-            echo "===> Run database migrations"
-            php artisan migrate --force
+              echo "===> Update code (main)"
+              git fetch origin
+              git reset --hard origin/main
 
-            echo "===> Clear & cache config/routes"
-            php artisan config:clear
-            php artisan cache:clear
-            php artisan config:cache
-            php artisan route:cache
+              echo "===> Install PHP dependencies"
+              composer install --no-interaction --prefer-dist --optimize-autoloader
 
-            echo "===> Build frontend assets"
-            npm install
-            npm run build
+              echo "===> Run database migrations"
+              php artisan migrate --force
 
-            echo "===> Restart services"
-            sudo systemctl restart php8.3-fpm || true
-            sudo systemctl restart nginx || true
+              echo "===> Clear & cache config/routes"
+              php artisan config:clear
+              php artisan cache:clear
+              php artisan config:cache
+              php artisan route:cache
+
+              echo "===> Build frontend assets"
+              npm install
+              npm run build
+
+              echo "===> Restart services"
+              sudo systemctl restart php8.3-fpm || true
+              sudo systemctl restart nginx || true
+          EOF

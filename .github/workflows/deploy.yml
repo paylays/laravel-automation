@@ -2,7 +2,7 @@ name: Deploy project-two via Cloudflare Tunnel
 
 on:
   push:
-    branches: [ main ]   # ganti ke 'development' kalau mau trigger di branch itu
+    branches: [ main ]
 
 jobs:
   deploy:

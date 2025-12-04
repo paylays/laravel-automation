@@ -1,0 +1,46 @@
+name: Deploy to VPS (main)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Deploy project-two via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ secrets.SERVER_PATH_TWO }}
+
+            echo "===> Update code (main)"
+            git fetch origin
+            git reset --hard origin/main
+
+            echo "===> Install PHP dependencies"
+            composer install --no-interaction --prefer-dist --optimize-autoloader
+
+            echo "===> Run database migrations"
+            php artisan migrate --force
+
+            echo "===> Clear & cache config/routes"
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan config:cache
+            php artisan route:cache
+
+            echo "===> Build frontend assets"
+            npm install
+            npm run build
+
+            echo "===> Restart services"
+            sudo systemctl restart php8.3-fpm || true
+            sudo systemctl restart nginx || true

@@ -26,7 +26,7 @@ jobs:
 
       - name: Deploy project-two over Cloudflare Tunnel
         env:
-          CF_HOST: ${{ secrets.CF_SSH_HOST }}   # isi secret=ssh.paylayspace.my.id
+          CF_HOST: ${{ secrets.CF_SSH_HOST }}
         run: |
           ssh -i ~/.ssh/id_rsa \
             -o "ProxyCommand=cloudflared access ssh --hostname $CF_HOST" \
